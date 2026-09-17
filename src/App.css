@@ -5,6 +5,9 @@
   justify-content: center;
   height: 100vh;
 }
+.main.touched {
+  background-color: red; /* Change background color when touch is detected */
+}
 .video {
   width: 480px;
   height: 360px;

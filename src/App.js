@@ -1,9 +1,10 @@
-import "./App.css";
 import * as tf from "@tensorflow/tfjs";
 import * as mobilenet from "@tensorflow-models/mobilenet";
 import { Howl } from "howler";
 import soundFile from "./assets/sound.mp3";
-import React, { useEffect, useRef } from "react";
+import "./App.css";
+
+import React, { useEffect, useRef, useState } from "react";
 var sound = new Howl({
   src: [soundFile],
 });
@@ -16,6 +17,10 @@ const TRAINING_ITERATIONS = 50;
 
 function App() {
   const videoRef = useRef();
+  const classifierRef = useRef();
+  const modelRef = useRef();
+
+  const [touched, setTouched] = useState(false);
   const init = async () => {
     console.log("Initializing...");
     await setupCamera();
@@ -23,12 +28,16 @@ function App() {
     const mobilenet = require("@tensorflow-models/mobilenet");
     const knnClassifier = require("@tensorflow-models/knn-classifier");
 
-    const model = await mobilenet.load();
+    modelRef.current = await mobilenet.load();
 
     // Create the classifier.
-    const classifier = knnClassifier.create();
+    classifierRef.current = knnClassifier.create();
+    console.log("Set up Done.");
+
+    console.log("Không chạm tay lên mặt và Bấm Train 1.");
   };
-  const setupCamera = async () => {
+
+  const setupCamera = () => {
     return new Promise((resolve, reject) => {
       navigator.getUserMedia =
         navigator.getUserMedia ||
@@ -56,14 +65,36 @@ function App() {
     });
   };
   const train = async (label) => {
+    console.log(`Training for label: ${label}`);
     for (let i = 0; i < TRAINING_ITERATIONS; ++i) {
       console.log(
         `Progress: ${parseInt(((i + 1) / TRAINING_ITERATIONS) * 100)}%`,
       );
-      await sleep(100); // Simulate delay
+      await training(label); // Simulate delay
     }
   };
+  const training = (label) => {
+    return new Promise(async (resolve) => {
+      const embeddings = modelRef.current.infer(videoRef.current, true);
 
+      classifierRef.current.addExample(embeddings, label);
+      await sleep(100); // Simulate delay
+      resolve();
+    });
+  };
+  const run = async () => {
+    const embeddings = modelRef.current.infer(videoRef.current, true);
+    const result = await classifierRef.current.predictClass(embeddings);
+    console.log("Label: ", result.label);
+    console.log("Confidence: ", result.confidences);
+    if (result.label === TOUCH_label && result.confidences[TOUCH_label] > 0.8) {
+      setTouched(true);
+      sound.play();
+    } else {
+      setTouched(false);
+    }
+    run();
+  };
   const sleep = (ms) => {
     return new Promise((resolve) => setTimeout(resolve, ms));
   };
@@ -75,7 +106,7 @@ function App() {
   }, []);
 
   return (
-    <div className="main">
+    <div className={`main ${touched ? "touched" : ""}`}>
       <video className="video" autoPlay ref={videoRef} />
       <div className="controls">
         <button
@@ -86,8 +117,8 @@ function App() {
         <button className="control-button" onClick={() => train(TOUCH_label)}>
           Train Touch
         </button>
-        <button className="control-button" onClick={() => sound.stop()}>
-          Train
+        <button className="control-button" onClick={() => run()}>
+          Run
         </button>
       </div>
     </div>
